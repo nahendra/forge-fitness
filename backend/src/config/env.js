@@ -32,6 +32,21 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().optional().default(''),
   AI_MODEL: z.string().default('claude-sonnet-4-6'),
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+
+  // Public URL of the frontend — used to build links inside outgoing emails.
+  APP_URL: z.string().default('http://localhost:5173'),
+
+  // Transactional email (account-created confirmation). Defaults to a no-op
+  // so the app works with zero email setup; registration never depends on
+  // this succeeding.
+  EMAIL_PROVIDER: z.enum(['none', 'resend', 'smtp']).default('none'),
+  EMAIL_FROM: z.string().default('FORGE Fitness <onboarding@forge.fitness>'),
+  RESEND_API_KEY: z.string().optional().default(''),
+  SMTP_HOST: z.string().optional().default(''),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: booleanString(false),
+  SMTP_USER: z.string().optional().default(''),
+  SMTP_PASSWORD: z.string().optional().default(''),
 });
 
 const parsed = schema.safeParse(process.env);

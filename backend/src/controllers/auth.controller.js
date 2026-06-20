@@ -1,5 +1,6 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { registerUser, authenticateUser, signToken, getUserById } from '../services/auth.service.js';
+import { sendWelcomeEmail } from '../services/email.service.js';
 import { setAuthCookie, clearAuthCookie, issueCsrfCookie } from '../utils/cookies.js';
 
 export const register = asyncHandler(async (req, res) => {
@@ -9,6 +10,10 @@ export const register = asyncHandler(async (req, res) => {
   const csrfToken = issueCsrfCookie(res);
   req.log.info({ userId: user.id }, 'User registered');
   res.status(201).json({ user, csrfToken });
+
+  // Not awaited on purpose — email delivery must never delay or fail the
+  // registration response. Failures are logged inside the service itself.
+  sendWelcomeEmail({ name: user.name, email: user.email });
 });
 
 export const login = asyncHandler(async (req, res) => {

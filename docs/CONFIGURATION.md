@@ -24,6 +24,11 @@ repo. Three `.env.example` files exist: root (docker-compose), `backend/.env.exa
 | `AI_MODEL` | no | `claude-sonnet-4-6` | Any current model id for the chosen provider |
 | `AI_TIMEOUT_MS` | no | `8000` | Hard timeout before falling back to the deterministic plan |
 | `RUN_SEED_ON_BOOT` (docker only) | no | `false` | If `true`, container runs `prisma/seed.js` on every start — leave `false` after first deploy |
+| `APP_URL` | no | `http://localhost:5173` | Public frontend URL — used to build the "Go to dashboard" link in emails |
+| `EMAIL_PROVIDER` | no | `none` | `none\|resend\|smtp` — see below |
+| `EMAIL_FROM` | no | `FORGE Fitness <onboarding@forge.fitness>` | Must be a domain you've verified with your provider, or sending will fail (and be silently skipped — see below) |
+| `RESEND_API_KEY` | only if `EMAIL_PROVIDER=resend` | — | From resend.com |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_SECURE` | only if `EMAIL_PROVIDER=smtp` | — | Standard SMTP credentials (Gmail, AWS SES, Mailtrap, etc.) |
 
 ## Frontend (`frontend/.env`)
 
@@ -55,6 +60,32 @@ If the provider call fails, times out, or the key is missing, the API silently f
 rule-engine text — the feature is additive and never blocks plan generation. See
 `backend/src/services/ai.service.js` for the prompt-injection defenses (delimited untrusted input,
 explicit instruction-boundary system prompt, output-length validation).
+
+## Account-created confirmation email
+
+Off by default (`EMAIL_PROVIDER=none`) — registration works identically either way, the email is
+purely additive and is sent fire-and-forget (it never delays or fails the registration response;
+failures are only logged, see `backend/src/services/email.service.js`). Two ways to turn it on:
+
+```
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_...
+EMAIL_FROM=FORGE Fitness <onboarding@yourdomain.com>
+```
+or
+```
+EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.yourprovider.com
+SMTP_PORT=587
+SMTP_USER=...
+SMTP_PASSWORD=...
+EMAIL_FROM=FORGE Fitness <onboarding@yourdomain.com>
+```
+
+`EMAIL_FROM` must use a domain you've verified with whichever provider you pick — unverified sender
+domains get rejected by the provider (logged as a warning, registration still succeeds). The email
+template itself lives in `backend/src/templates/welcomeEmail.js` as a pure function — edit it freely,
+it's covered by `backend/tests/welcomeEmail.test.js`.
 
 ## Rotating secrets
 

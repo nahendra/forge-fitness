@@ -11,3 +11,4 @@ coverage/
 .idea/
 backend/prisma/dev.db
 postgres-data/
+email-preview.html

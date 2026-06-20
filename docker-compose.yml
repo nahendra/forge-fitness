@@ -38,6 +38,15 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-claude-sonnet-4-6}
       RUN_SEED_ON_BOOT: ${RUN_SEED_ON_BOOT:-false}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-none}
+      EMAIL_FROM: ${EMAIL_FROM:-FORGE Fitness <onboarding@forge.fitness>}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     ports:
       - '${BACKEND_PORT:-4000}:4000'
 

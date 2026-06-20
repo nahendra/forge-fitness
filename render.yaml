@@ -35,6 +35,23 @@ services:
         value: https://forge-frontend-63u5.onrender.com
       - key: AI_PROVIDER
         value: none
+      - key: APP_URL
+        value: https://forge-frontend-63u5.onrender.com
+      # Account-created confirmation email — off by default (registration
+      # works fine either way). Set to "resend" or "smtp" plus the matching
+      # credentials below to turn it on. See docs/CONFIGURATION.md.
+      - key: EMAIL_PROVIDER
+        value: none
+      - key: EMAIL_FROM
+        value: FORGE Fitness <onboarding@forge.fitness>
+      - key: RESEND_API_KEY
+        value: ''
+      - key: SMTP_HOST
+        value: ''
+      - key: SMTP_USER
+        value: ''
+      - key: SMTP_PASSWORD
+        value: ''
 
   - type: web
     name: forge-frontend
