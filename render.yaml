@@ -48,6 +48,10 @@ services:
         value: ''
       - key: SMTP_HOST
         value: ''
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_SECURE
+        value: 'false'
       - key: SMTP_USER
         value: ''
       - key: SMTP_PASSWORD
