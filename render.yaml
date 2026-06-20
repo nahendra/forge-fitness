@@ -32,7 +32,7 @@ services:
       - key: COOKIE_SAMESITE
         value: none
       - key: CORS_ORIGIN
-        value: https://forge-frontend.onrender.com
+        value: https://forge-frontend-63u5.onrender.com
       - key: AI_PROVIDER
         value: none
 
@@ -46,4 +46,4 @@ services:
       # Read at container start (frontend/docker-entrypoint.sh), not baked in
       # at build time — update this if Render assigns a different backend URL.
       - key: API_BASE_URL
-        value: https://forge-backend.onrender.com/api
+        value: https://forge-backend-x70k.onrender.com/api
