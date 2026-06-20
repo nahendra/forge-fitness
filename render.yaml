@@ -42,5 +42,8 @@ services:
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
     plan: free
-    dockerBuildArgs:
-      VITE_API_BASE_URL: https://forge-backend.onrender.com/api
+    envVars:
+      # Read at container start (frontend/docker-entrypoint.sh), not baked in
+      # at build time — update this if Render assigns a different backend URL.
+      - key: API_BASE_URL
+        value: https://forge-backend.onrender.com/api

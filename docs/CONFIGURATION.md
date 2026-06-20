@@ -29,10 +29,10 @@ repo. Three `.env.example` files exist: root (docker-compose), `backend/.env.exa
 
 | Variable | Default | Notes |
 |---|---|---|
-| `VITE_API_BASE_URL` | `/api` | Baked into the JS bundle **at build time** (Vite). `/api` works when nginx proxies to the backend (the default docker-compose setup). Use a full URL (`https://api.example.com/api`) only if the API is on a different domain |
+| `VITE_API_BASE_URL` | `/api` | **Only used by `npm run dev` / `npm run build` directly (no Docker)** — baked into the JS bundle at build time by Vite |
+| `API_BASE_URL` (Docker only) | `/api` | Read by `frontend/docker-entrypoint.sh` **at container start**, not build time. `/api` works when nginx proxies to the backend (the default docker-compose setup). Use a full URL (`https://api.example.com/api`) only if the API is on a different domain |
 
-> Changing `VITE_API_BASE_URL` requires a rebuild (`npm run build` or `docker compose build frontend`)
-> — it is not read at runtime.
+> The Docker image is build-once/deploy-anywhere: `API_BASE_URL` is injected into a small `config.js` when the container starts, so the same image works behind the bundled nginx proxy or pointed at a remote API by just changing an environment variable — no rebuild needed. This is what fixes the `dockerBuildArgs` issue some PaaS Blueprint specs don't support (see [DEPLOYMENT.md](DEPLOYMENT.md)).
 
 ## Optional AI plan enrichment
 

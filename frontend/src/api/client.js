@@ -1,4 +1,7 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+// Resolution order: runtime config (injected by the Docker entrypoint at
+// container start, see public/config.js) → Vite build-time env var (static
+// hosts like Vercel that don't run our entrypoint) → local-dev default.
+const BASE_URL = window.__FORGE_CONFIG__?.API_BASE_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
 
 export class ApiClientError extends Error {
   constructor(message, status, details) {

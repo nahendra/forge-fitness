@@ -16,7 +16,10 @@ COOKIE_SAMESITE=none
 COOKIE_SECURE=true        # SameSite=None requires Secure — i.e. HTTPS, which every platform below provides
 CORS_ORIGIN=https://<your-frontend-domain>
 ```
-and set `VITE_API_BASE_URL=https://<your-backend-domain>/api` at frontend build time.
+and point the frontend at the backend's real URL: set the `API_BASE_URL` environment variable on the
+frontend's Docker container to `https://<your-backend-domain>/api` (read at container start by
+`frontend/docker-entrypoint.sh` — no rebuild needed). If you're building the frontend directly with
+`vercel`/`npm run build` instead of the Docker image, use `VITE_API_BASE_URL` at build time instead.
 
 ---
 
@@ -67,13 +70,14 @@ on it, and Caddy/nginx for TLS as above.
    aws ecr create-repository --repository-name forge-frontend
    docker build -t <account>.dkr.ecr.<region>.amazonaws.com/forge-backend ./backend
    docker push <account>.dkr.ecr.<region>.amazonaws.com/forge-backend
-   docker build -t <account>.dkr.ecr.<region>.amazonaws.com/forge-frontend \
-     --build-arg VITE_API_BASE_URL=https://api.yourdomain.com/api ./frontend
+   docker build -t <account>.dkr.ecr.<region>.amazonaws.com/forge-frontend ./frontend
    docker push <account>.dkr.ecr.<region>.amazonaws.com/forge-frontend
    ```
 3. Create two ECS Fargate services (backend, frontend), each behind an Application Load Balancer.
    Point the backend service's task env vars at the RDS `DATABASE_URL` and your secrets (use AWS
-   Secrets Manager + "Secrets" in the task definition rather than plaintext env vars).
+   Secrets Manager + "Secrets" in the task definition rather than plaintext env vars). On the
+   frontend task, set `API_BASE_URL=https://api.yourdomain.com/api` — it's read at container start,
+   so the same image works regardless of which domain ends up serving the API.
 4. Point Route53 at the ALBs; since frontend/backend will be on different ALB DNS names unless you
    put them behind one ALB with path-based routing (`/api/*` → backend target group, `/*` → frontend
    target group) — doing that keeps them same-origin and lets you keep `COOKIE_SAMESITE=strict`.
@@ -107,8 +111,10 @@ A ready-to-use Blueprint is included at [`render.yaml`](../render.yaml):
    blueprint automatically. Review/edit env vars in the dashboard (the blueprint pre-fills
    `COOKIE_SAMESITE=none` + `COOKIE_SECURE=true` because Render's two services land on different
    `*.onrender.com` subdomains, which count as different sites for cookie purposes).
-4. Once both services are live, update `CORS_ORIGIN` on the backend and the frontend's
-   `VITE_API_BASE_URL` build arg to match the actual generated `*.onrender.com` URLs, then redeploy.
+4. Once both services are live, update `CORS_ORIGIN` on the backend and `API_BASE_URL` on the
+   frontend to match the actual generated `*.onrender.com` URLs (Render often appends a random
+   suffix if the exact name in `render.yaml` is taken). `API_BASE_URL` is a plain environment
+   variable read at container start — no rebuild required, just save and let Render restart it.
 
 ## 6. Railway
 
@@ -125,8 +131,9 @@ railway up --service frontend ./frontend
 Minimal `railway.json` files are included in `backend/` and `frontend/` (Railway auto-detects each
 service's `Dockerfile` regardless). In the Railway dashboard, set the backend service's variables
 (`DATABASE_URL` from the Postgres plugin's reference variable, `JWT_SECRET`, `COOKIE_SAMESITE=none`,
-`COOKIE_SECURE=true`, `CORS_ORIGIN=<frontend public URL>`), and set the frontend service's build
-argument `VITE_API_BASE_URL=<backend public URL>/api`.
+`COOKIE_SECURE=true`, `CORS_ORIGIN=<frontend public URL>`), and set the frontend service's
+environment variable `API_BASE_URL=<backend public URL>/api` (read at container start, not build
+time — Railway will restart the container automatically when you save it).
 
 ## 7. Vercel (frontend only)
 
