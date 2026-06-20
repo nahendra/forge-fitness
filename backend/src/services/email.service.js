@@ -1,6 +1,7 @@
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { buildWelcomeEmail } from '../templates/welcomeEmail.js';
+import { buildPasswordResetEmail } from '../templates/passwordResetEmail.js';
 
 let cachedTransporter = null;
 
@@ -48,21 +49,30 @@ const PROVIDERS = { smtp: sendViaSmtp, resend: sendViaResend };
 
 /**
  * Fire-and-forget by design: email delivery must never block or fail the
- * account-creation request. Callers should NOT await this in the critical
- * path — call it, let it run, and it logs its own success/failure.
+ * request that triggered it. Callers should NOT await these in the critical
+ * path — call them, let them run, they log their own success/failure.
  */
-export async function sendWelcomeEmail({ name, email }) {
+async function dispatchEmail(label, email, { subject, html, text }) {
   if (env.EMAIL_PROVIDER === 'none') {
-    logger.info({ email }, 'EMAIL_PROVIDER=none — skipping welcome email');
+    logger.info({ email }, `EMAIL_PROVIDER=none — skipping ${label}`);
     return;
   }
 
   try {
-    const { subject, html, text } = buildWelcomeEmail({ name, email, appUrl: env.APP_URL });
     const send = PROVIDERS[env.EMAIL_PROVIDER];
     await send({ to: email, subject, html, text });
-    logger.info({ email, provider: env.EMAIL_PROVIDER }, 'Welcome email sent');
+    logger.info({ email, provider: env.EMAIL_PROVIDER }, `${label} sent`);
   } catch (err) {
-    logger.warn({ email, provider: env.EMAIL_PROVIDER, err: err.message }, 'Failed to send welcome email');
+    logger.warn({ email, provider: env.EMAIL_PROVIDER, err: err.message }, `Failed to send ${label}`);
   }
+}
+
+export function sendWelcomeEmail({ name, email }) {
+  const content = buildWelcomeEmail({ name, email, appUrl: env.APP_URL });
+  return dispatchEmail('welcome email', email, content);
+}
+
+export function sendPasswordResetEmail({ name, email, resetUrl, expiresInMinutes }) {
+  const content = buildPasswordResetEmail({ name, resetUrl, expiresInMinutes });
+  return dispatchEmail('password reset email', email, content);
 }

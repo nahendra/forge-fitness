@@ -78,6 +78,7 @@ See `backend/prisma/schema.prisma` for the source of truth. Summary:
 ```
 User 1──* WorkoutSession 1──* Exercise 1──* ExerciseSet
 User 1──* WeightLog
+User 1──* PasswordResetToken
 (MotivationQuote / MotivationTip / FitnessTruth / TransformationStory are standalone content tables)
 ```
 

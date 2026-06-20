@@ -83,9 +83,30 @@ EMAIL_FROM=FORGE Fitness <onboarding@yourdomain.com>
 ```
 
 `EMAIL_FROM` must use a domain you've verified with whichever provider you pick — unverified sender
-domains get rejected by the provider (logged as a warning, registration still succeeds). The email
-template itself lives in `backend/src/templates/welcomeEmail.js` as a pure function — edit it freely,
-it's covered by `backend/tests/welcomeEmail.test.js`.
+domains get rejected by the provider (logged as a warning, registration still succeeds). **If using
+Gmail SMTP specifically**, `EMAIL_FROM` must match `SMTP_USER` exactly (Gmail only allows sending as
+the authenticated account or a verified alias) — every recipient will see that personal address as
+the sender, which is fine for testing but not a substitute for a real verified domain in production.
+The email template itself lives in `backend/src/templates/welcomeEmail.js` as a pure function — edit
+it freely, it's covered by `backend/tests/welcomeEmail.test.js`.
+
+## Forgot password
+
+Always on (no env var to disable it) — built on the same `EMAIL_PROVIDER` config above. If
+`EMAIL_PROVIDER=none`, the "forgot password" request still succeeds (same generic response either
+way, by design — see below) but no email is ever sent, so in practice the feature is unusable
+without an email provider configured.
+
+- `POST /api/auth/forgot-password { email }` always returns the same generic message regardless of
+  whether the email is registered — this is deliberate (an email-enumeration defense). If the
+  account exists, a one-time token (SHA-256 hashed before storage, raw value only ever in the
+  emailed link) is created with a 60-minute expiry, and any earlier outstanding tokens for that user
+  are invalidated.
+- `POST /api/auth/reset-password { token, password }` consumes the token — using it (successfully
+  or not) invalidates every outstanding token for that user, so an old emailed link can't be reused
+  after a newer one was issued or already used.
+- There is no rate limit specific to this endpoint beyond the shared `AUTH_RATE_LIMIT_MAX` — see
+  `backend/src/services/passwordReset.service.js` and `backend/src/templates/passwordResetEmail.js`.
 
 ## Rotating secrets
 

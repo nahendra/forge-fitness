@@ -48,7 +48,12 @@ export default function LoginPage() {
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
-          <Button type="submit" loading={loading} className="w-full mt-2">
+          <div className="text-right -mt-2 mb-3">
+            <Link to="/forgot-password" className="text-white/40 hover:text-orange text-xs font-mono">
+              Forgot password?
+            </Link>
+          </div>
+          <Button type="submit" loading={loading} className="w-full">
             Sign In
           </Button>
         </form>
