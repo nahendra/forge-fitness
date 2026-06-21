@@ -14,7 +14,7 @@ repo. Three `.env.example` files exist: root (docker-compose), `backend/.env.exa
 | `JWT_SECRET` | **yes** | — | 32+ random chars. Rotating it invalidates all sessions |
 | `JWT_EXPIRES_IN` | no | `7d` | Format: `<number><s\|m\|h\|d>` |
 | `COOKIE_SECURE` | no | `false` | Set `true` in any environment served over HTTPS (always true in real production) |
-| `COOKIE_SAMESITE` | no | `strict` | Use `none` (+ `COOKIE_SECURE=true`) only if frontend and backend are on **different domains** — see [DEPLOYMENT.md](DEPLOYMENT.md#cross-domain-frontendbackend) |
+| `COOKIE_SAMESITE` | no | `strict` | Leave as `strict` — the frontend's nginx proxies `/api` to the backend (see `BACKEND_ORIGIN` below), so the browser only ever talks to one origin even when the two services are deployed separately. Only use `none` (+ `COOKIE_SECURE=true`) if you've deliberately bypassed that proxy and point the SPA straight at the backend's own domain |
 | `CORS_ORIGIN` | no | `http://localhost:5173` | Exact origin of the frontend. Must match precisely (scheme+host+port) |
 | `LOG_LEVEL` | no | `info` | `trace\|debug\|info\|warn\|error\|fatal\|silent` (pino levels) |
 | `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` | no | 15 min / 300 | Global API rate limit |
@@ -35,9 +35,12 @@ repo. Three `.env.example` files exist: root (docker-compose), `backend/.env.exa
 | Variable | Default | Notes |
 |---|---|---|
 | `VITE_API_BASE_URL` | `/api` | **Only used by `npm run dev` / `npm run build` directly (no Docker)** — baked into the JS bundle at build time by Vite |
-| `API_BASE_URL` (Docker only) | `/api` | Read by `frontend/docker-entrypoint.sh` **at container start**, not build time. `/api` works when nginx proxies to the backend (the default docker-compose setup). Use a full URL (`https://api.example.com/api`) only if the API is on a different domain |
+| `API_BASE_URL` (Docker only) | `/api` | Read by `frontend/docker-entrypoint.sh` **at container start**, not build time. Leave as `/api` — the browser calls the SPA's own origin, and nginx proxies that to `BACKEND_ORIGIN` server-side. Only point this at a full external URL if you want the browser to bypass the proxy and call the backend's domain directly (re-introduces the cross-site cookie problem `BACKEND_ORIGIN` exists to avoid) |
+| `BACKEND_ORIGIN` (Docker only) | `http://backend:4000` | Read by `frontend/docker-entrypoint.sh` **at container start**. The real address of the backend — `http://backend:4000` for the bundled docker-compose network, or a full external URL (`https://your-backend.onrender.com`) when frontend and backend are separate services. Nginx proxies `/api/*` here so the browser only ever sees the frontend's own domain |
 
-> The Docker image is build-once/deploy-anywhere: `API_BASE_URL` is injected into a small `config.js` when the container starts, so the same image works behind the bundled nginx proxy or pointed at a remote API by just changing an environment variable — no rebuild needed. This is what fixes the `dockerBuildArgs` issue some PaaS Blueprint specs don't support (see [DEPLOYMENT.md](DEPLOYMENT.md)).
+> The Docker image is build-once/deploy-anywhere: both variables are injected at container start (`API_BASE_URL` into a small `config.js`, `BACKEND_ORIGIN` into the nginx config via `sed`), so the same image works behind the bundled proxy regardless of whether the backend is on the same Docker network or a completely different domain — no rebuild needed. This is also what fixes the `dockerBuildArgs` issue some PaaS Blueprint specs don't support (see [DEPLOYMENT.md](DEPLOYMENT.md)).
+>
+> **Why proxy instead of calling the backend directly from the browser?** Mobile browsers in particular have gotten increasingly aggressive about blocking cookies between two different domains, even when `SameSite=None; Secure` is configured correctly — this is a moving target across browser versions, not something you can reliably code around from the API side. Routing everything through the frontend's own origin sidesteps the problem entirely: there's no cross-site cookie for any browser to block, because there's no cross-site request in the first place.
 
 ## Optional AI plan enrichment
 

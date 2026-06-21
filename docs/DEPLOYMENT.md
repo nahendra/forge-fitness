@@ -6,20 +6,30 @@ that matches your infrastructure.
 
 ## Cross-domain frontend/backend
 
-The default setup (nginx proxy, see `frontend/nginx.conf`) keeps frontend and backend on **one
-origin**, which is why auth cookies use `SameSite=strict`. If you deploy frontend and backend to
-**different domains** (Vercel + Railway, two separate Render services, etc.), the browser will not
-send `SameSite=strict` cookies cross-site, and login will silently appear to fail. Fix:
+The frontend's nginx proxies `/api/*` to the backend internally (see `frontend/nginx.conf` and the
+`BACKEND_ORIGIN` env var below) — the browser only ever talks to the frontend's own domain, so auth
+cookies stay `SameSite=strict` **even when frontend and backend are two separate services on two
+separate domains** (two Render services, frontend on Vercel + backend on Railway, etc.). This is the
+default and the recommended path for every option below; just set `BACKEND_ORIGIN` to the backend's
+real URL on whichever platform you're using.
 
+This matters more than it might look: mobile browsers in particular have gotten increasingly
+aggressive about blocking cookies shared between two different domains, even when configured
+correctly with `SameSite=None; Secure` — it's a moving target across browser versions, not something
+you can reliably code around from the API side. Routing everything through one origin sidesteps the
+problem rather than fighting it. (We initially shipped this app with the `SameSite=None` approach and
+it broke logins on Android Chrome in production — see `docs/TROUBLESHOOTING.md`.)
+
+**Only if you deliberately want the browser to call the backend's domain directly** (bypassing the
+proxy — e.g. a custom frontend deployment that can't run nginx) do you need the old cross-site setup:
 ```
 COOKIE_SAMESITE=none
-COOKIE_SECURE=true        # SameSite=None requires Secure — i.e. HTTPS, which every platform below provides
+COOKIE_SECURE=true        # SameSite=None requires Secure — i.e. HTTPS
 CORS_ORIGIN=https://<your-frontend-domain>
 ```
-and point the frontend at the backend's real URL: set the `API_BASE_URL` environment variable on the
-frontend's Docker container to `https://<your-backend-domain>/api` (read at container start by
-`frontend/docker-entrypoint.sh` — no rebuild needed). If you're building the frontend directly with
-`vercel`/`npm run build` instead of the Docker image, use `VITE_API_BASE_URL` at build time instead.
+plus pointing the frontend at the backend's full URL via `VITE_API_BASE_URL` (build time, non-Docker)
+or `API_BASE_URL` (container start, Docker — though if you're using the Docker image, just set
+`BACKEND_ORIGIN` instead and keep the proxy).
 
 ---
 
@@ -76,11 +86,13 @@ on it, and Caddy/nginx for TLS as above.
 3. Create two ECS Fargate services (backend, frontend), each behind an Application Load Balancer.
    Point the backend service's task env vars at the RDS `DATABASE_URL` and your secrets (use AWS
    Secrets Manager + "Secrets" in the task definition rather than plaintext env vars). On the
-   frontend task, set `API_BASE_URL=https://api.yourdomain.com/api` — it's read at container start,
-   so the same image works regardless of which domain ends up serving the API.
-4. Point Route53 at the ALBs; since frontend/backend will be on different ALB DNS names unless you
-   put them behind one ALB with path-based routing (`/api/*` → backend target group, `/*` → frontend
-   target group) — doing that keeps them same-origin and lets you keep `COOKIE_SAMESITE=strict`.
+   frontend task, set `BACKEND_ORIGIN=https://api.yourdomain.com` — it's read at container start, so
+   the same image works regardless of which domain ends up serving the API; leave `API_BASE_URL` at
+   its default `/api`, and the frontend's nginx will proxy through to the backend automatically,
+   keeping everything same-origin from the browser's perspective.
+4. Point Route53 at the frontend ALB's DNS name. The backend can stay on its own ALB DNS name — it
+   doesn't need to be same-origin at the infra level, since the frontend's nginx proxy is what makes
+   it same-origin from the browser's point of view.
 
 ## 4. Azure
 
@@ -95,10 +107,11 @@ az containerapp env create -g forge-rg -n forge-env -l eastus
 az containerapp create -g forge-rg -n forge-backend --environment forge-env \
   --image <your-registry>/forge-backend:latest --target-port 4000 --ingress external \
   --env-vars NODE_ENV=production DATABASE_URL=<connection-string> JWT_SECRET=<secret> \
-             COOKIE_SECURE=true COOKIE_SAMESITE=none CORS_ORIGIN=https://forge-frontend.<region>.azurecontainerapps.io
+             COOKIE_SECURE=true COOKIE_SAMESITE=strict CORS_ORIGIN=https://forge-frontend.<region>.azurecontainerapps.io
 
 az containerapp create -g forge-rg -n forge-frontend --environment forge-env \
-  --image <your-registry>/forge-frontend:latest --target-port 80 --ingress external
+  --image <your-registry>/forge-frontend:latest --target-port 80 --ingress external \
+  --env-vars BACKEND_ORIGIN=https://forge-backend.<region>.azurecontainerapps.io
 ```
 (Build/push images to Azure Container Registry first with `az acr build`.)
 
@@ -108,13 +121,16 @@ A ready-to-use Blueprint is included at [`render.yaml`](../render.yaml):
 1. Push this repo to GitHub.
 2. Render dashboard → **New +** → **Blueprint** → select the repo.
 3. Render provisions the Postgres database, backend web service, and frontend web service from the
-   blueprint automatically. Review/edit env vars in the dashboard (the blueprint pre-fills
-   `COOKIE_SAMESITE=none` + `COOKIE_SECURE=true` because Render's two services land on different
-   `*.onrender.com` subdomains, which count as different sites for cookie purposes).
-4. Once both services are live, update `CORS_ORIGIN` on the backend and `API_BASE_URL` on the
+   blueprint automatically. Even though Render's two services land on different `*.onrender.com`
+   subdomains, the frontend's nginx proxies `/api/*` to the backend internally (`BACKEND_ORIGIN`), so
+   the browser only ever sees the frontend's domain — that's why the blueprint can keep
+   `COOKIE_SAMESITE=strict` instead of the cross-site `none` workaround.
+4. Once both services are live, update `CORS_ORIGIN` on the backend and `BACKEND_ORIGIN` on the
    frontend to match the actual generated `*.onrender.com` URLs (Render often appends a random
-   suffix if the exact name in `render.yaml` is taken). `API_BASE_URL` is a plain environment
-   variable read at container start — no rebuild required, just save and let Render restart it.
+   suffix if the exact name in `render.yaml` is taken). Both are plain environment variables read at
+   container start — no rebuild required for env-var-only changes, just save and let Render restart
+   it (changing `BACKEND_ORIGIN` does require the frontend container to restart, which saving the env
+   var triggers automatically).
 
 ## 6. Railway
 
@@ -130,10 +146,11 @@ railway up --service frontend ./frontend
 ```
 Minimal `railway.json` files are included in `backend/` and `frontend/` (Railway auto-detects each
 service's `Dockerfile` regardless). In the Railway dashboard, set the backend service's variables
-(`DATABASE_URL` from the Postgres plugin's reference variable, `JWT_SECRET`, `COOKIE_SAMESITE=none`,
+(`DATABASE_URL` from the Postgres plugin's reference variable, `JWT_SECRET`, `COOKIE_SAMESITE=strict`,
 `COOKIE_SECURE=true`, `CORS_ORIGIN=<frontend public URL>`), and set the frontend service's
-environment variable `API_BASE_URL=<backend public URL>/api` (read at container start, not build
-time — Railway will restart the container automatically when you save it).
+environment variable `BACKEND_ORIGIN=<backend public URL>` (read at container start, not build time —
+Railway will restart the container automatically when you save it). Leave `API_BASE_URL` at its
+default `/api`; nginx proxies it to `BACKEND_ORIGIN` so the browser stays same-origin.
 
 ## 7. Vercel (frontend only)
 
@@ -149,9 +166,18 @@ connection-pooling proxy (e.g. Prisma Accelerate/PgBouncer). Recommended split:
   ```
   Vercel auto-detects the Vite project; no extra config needed beyond the env var above (set it in
   the Vercel dashboard too, so subsequent dashboard-triggered builds pick it up).
-- **Backend → Render/Railway/Fly.io/a VPS** (any option above). Then apply the
-  [cross-domain cookie settings](#cross-domain-frontendbackend) since Vercel's domain and your
-  backend's domain are different sites.
+- **Backend → Render/Railway/Fly.io/a VPS** (any option above).
+
+  Vercel doesn't run our nginx container, so the proxy trick the other platforms use isn't available
+  here directly — the browser would call the backend's domain straight, which is exactly the
+  cross-site cookie situation this whole section is about avoiding. Two options:
+  1. Apply the [cross-domain cookie settings](#cross-domain-frontendbackend) (`COOKIE_SAMESITE=none`)
+     and accept that some mobile browsers may still be unreliable, **or**
+  2. Replicate the proxy using Vercel's own `rewrites` config (add a `vercel.json` with a rewrite
+     from `/api/:path*` to your backend's URL) — this keeps everything same-origin from the browser's
+     perspective the same way the bundled nginx proxy does, and lets you keep `COOKIE_SAMESITE=strict`.
+     Not included in this repo by default since it's Vercel-specific config with no equivalent on the
+     other platforms, but it's a small addition if you go this route.
 
 ## CI (sample GitHub Actions)
 

@@ -33,16 +33,53 @@ This is also the expected, correct behavior if something forges a cross-site req
 `backend/src/middleware/csrf.js`.
 
 ## Login appears to succeed but I'm immediately logged out / `GET /api/auth/me` returns 401
-Almost always a cookie `SameSite`/domain mismatch:
-- Frontend and backend on **different domains** (e.g. Vercel + Railway)? You need
-  `COOKIE_SAMESITE=none` + `COOKIE_SECURE=true` (which requires HTTPS) — see
-  [DEPLOYMENT.md](DEPLOYMENT.md#cross-domain-frontendbackend).
+- Frontend and backend on **different domains**, and you've deliberately bypassed the bundled nginx
+  proxy (i.e. `API_BASE_URL` points at the backend's own domain instead of `/api`)? You need
+  `COOKIE_SAMESITE=none` + `COOKIE_SECURE=true` (which requires HTTPS) on the backend — see
+  [DEPLOYMENT.md](DEPLOYMENT.md#cross-domain-frontendbackend). The better fix is usually to stop
+  bypassing the proxy: set `BACKEND_ORIGIN` to the backend's real URL and leave `API_BASE_URL` at its
+  default `/api` instead — see "Login works on desktop but fails on some mobile browsers" below for
+  why this matters in practice, not just in theory.
 - Testing over plain `http://` with `COOKIE_SECURE=true`? Browsers drop `Secure` cookies on non-HTTPS
   origins. Use `COOKIE_SECURE=false` for local HTTP development.
 - Check DevTools → Application → Cookies — if `forge_token` isn't there at all, the `Set-Cookie`
   response header is likely being stripped by an intermediate proxy that doesn't forward it; if it's
   there but requests don't include it, check `credentials: 'include'` is set on every fetch (it is,
   in `frontend/src/api/client.js` — only relevant if you've customized the client).
+
+## Login works on desktop but fails on some mobile browsers ("Invalid or missing CSRF token")
+This is exactly what happened during this app's own development, so it's worth describing in detail.
+The symptom: registration/login work fine in a desktop browser, but consistently fail on a phone
+(reproducing even in a fresh incognito tab, ruling out stale cache), always with a CSRF rejection.
+
+Two candidate causes, in the order we ruled them out:
+1. **A startup race condition** — if the frontend fetches its CSRF token in the background on page
+   load and the login form is submitted before that finishes (more likely on a slow connection, or
+   when a free-tier backend instance is waking from sleep, which can take 50+ seconds), the request
+   goes out with no CSRF header at all. Fixed in this codebase already (`frontend/src/api/client.js`
+   lazily fetches/awaits a token before any mutating request, instead of relying on a startup
+   prefetch) — if you're seeing this on a fork/older copy, check that fix is present.
+2. **The real cause in our case**: when frontend and backend are on two different domains, the
+   browser must treat the auth cookie as a third-party/cross-site cookie, and an increasing number of
+   mobile browsers restrict those — Safari has done this for years, and Chrome has been rolling out
+   similar restrictions. This held true even with `COOKIE_SAMESITE=none; Secure` configured *correctly*,
+   and even with the browser's own "third-party cookies" setting explicitly set to **allow** — the
+   restriction came from a newer, separate tracking-protection mechanism that the legacy toggle
+   doesn't fully reflect. There is no environment variable fix for this; it's not a misconfiguration.
+
+The actual fix: stop making the cookie cross-site in the first place. Set `BACKEND_ORIGIN` on the
+frontend to the backend's real URL and leave `API_BASE_URL` at its default `/api` — the frontend's
+nginx then proxies API calls to the backend server-side, so the browser only ever sees one origin and
+the cookie is an ordinary first-party cookie on every browser, mobile included. See
+[CONFIGURATION.md](CONFIGURATION.md#frontend-frontendenv) for the variables and
+[DEPLOYMENT.md](DEPLOYMENT.md#cross-domain-frontendbackend) for why this is the default recommendation
+now rather than the `SameSite=none` workaround.
+
+If you've set `BACKEND_ORIGIN` to an `https://` URL and instead get a 502 with `SSL_do_handshake()
+failed` in the frontend container's logs, that's a separate, unrelated issue: nginx doesn't send SNI
+to HTTPS upstreams by default, which most platforms (Render included) require to route to the right
+backend. `frontend/nginx.conf` already sets `proxy_ssl_server_name on;` to handle this — if you've
+customized that file, check it's still there.
 
 ## CORS error in the browser console
 `CORS_ORIGIN` on the backend must be the **exact** origin (scheme + host + port) the frontend is

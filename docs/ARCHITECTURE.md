@@ -1,6 +1,10 @@
 # Architecture
 
-## Request flow (production / docker-compose)
+## Request flow
+
+This is the same regardless of whether frontend and backend run on one Docker network or as two
+entirely separate services on two different domains (e.g. two Render services) — `BACKEND_ORIGIN`
+(see [CONFIGURATION.md](CONFIGURATION.md)) just changes where nginx forwards `/api/*` to.
 
 ```
                          ┌─────────────────────────┐

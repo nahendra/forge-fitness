@@ -29,8 +29,11 @@ services:
         generateValue: true
       - key: COOKIE_SECURE
         value: true
+      # "strict" works because the frontend's nginx proxies /api to this
+      # service internally (see frontend/nginx.conf) — the browser only ever
+      # talks to the frontend's own domain, so auth cookies are same-site.
       - key: COOKIE_SAMESITE
-        value: none
+        value: strict
       - key: CORS_ORIGIN
         value: https://forge-frontend-63u5.onrender.com
       - key: AI_PROVIDER
@@ -64,7 +67,12 @@ services:
     dockerContext: ./frontend
     plan: free
     envVars:
-      # Read at container start (frontend/docker-entrypoint.sh), not baked in
-      # at build time — update this if Render assigns a different backend URL.
+      # The browser always calls its own origin's /api path...
       - key: API_BASE_URL
-        value: https://forge-backend-x70k.onrender.com/api
+        value: /api
+      # ...which nginx then proxies server-side to the real backend here.
+      # Both read at container start (frontend/docker-entrypoint.sh), not
+      # baked in at build time — update this if Render assigns a different
+      # backend URL.
+      - key: BACKEND_ORIGIN
+        value: https://forge-backend-x70k.onrender.com
