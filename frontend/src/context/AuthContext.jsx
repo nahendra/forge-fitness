@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { fetchCsrfToken, fetchMe, loginRequest, logoutRequest, registerRequest, updateProfile as updateProfileApi } from '../api/auth.api.js';
+import { fetchMe, loginRequest, logoutRequest, registerRequest, updateProfile as updateProfileApi } from '../api/auth.api.js';
 
 const AuthContext = createContext(null);
 
@@ -8,9 +8,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // No need to pre-fetch a CSRF token here — api/client.js fetches one
+    // lazily (and dedupes concurrent callers) the first time a mutating
+    // request actually needs it, which is both simpler and avoids two
+    // independent fetches ever racing each other for separate tokens.
     (async () => {
       try {
-        await fetchCsrfToken();
         const { user: me } = await fetchMe();
         setUser(me);
       } catch {

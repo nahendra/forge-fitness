@@ -21,8 +21,26 @@ export class ApiClientError extends Error {
 // CORS/SameSite. The response body has no such restriction, so it's the
 // only mechanism that's correct in both same-origin and split-domain setups.
 let csrfToken = null;
+let csrfFetchPromise = null;
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+// Guarantees a token exists before a mutating request goes out, instead of
+// racing the app's startup fetch. Without this, submitting a form before
+// that startup fetch resolves (slow network, or a Render free-tier instance
+// waking from sleep — which can take 50+ seconds) sends the request with no
+// CSRF header at all, which the backend correctly rejects. Concurrent
+// callers share one in-flight fetch rather than firing duplicates.
+async function ensureCsrfToken() {
+  if (csrfToken) return csrfToken;
+  if (!csrfFetchPromise) {
+    csrfFetchPromise = apiRequest('/auth/csrf-token', { method: 'GET' }).finally(() => {
+      csrfFetchPromise = null;
+    });
+  }
+  await csrfFetchPromise;
+  return csrfToken;
+}
 
 export async function apiRequest(path, { method = 'GET', body, params } = {}) {
   let url = `${BASE_URL}${path}`;
@@ -34,8 +52,9 @@ export async function apiRequest(path, { method = 'GET', body, params } = {}) {
   }
 
   const headers = { 'Content-Type': 'application/json' };
-  if (MUTATING_METHODS.has(method) && csrfToken) {
-    headers['x-csrf-token'] = csrfToken;
+  if (MUTATING_METHODS.has(method)) {
+    const token = await ensureCsrfToken();
+    if (token) headers['x-csrf-token'] = token;
   }
 
   const res = await fetch(url, {
