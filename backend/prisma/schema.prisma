@@ -33,8 +33,23 @@ model User {
   workoutSessions     WorkoutSession[]
   weightLogs          WeightLog[]
   passwordResetTokens PasswordResetToken[]
+  customExercises     CustomExercise[]
 
   @@map("users")
+}
+
+model CustomExercise {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Mirrors the muscle-group buckets used by the workout logger (Chest,
+  // Back, ...) — not an enum since the frontend's list can grow without a
+  // migration.
+  bodyPart String
+  name     String
+
+  @@unique([userId, bodyPart, name])
+  @@map("custom_exercises")
 }
 
 model PasswordResetToken {

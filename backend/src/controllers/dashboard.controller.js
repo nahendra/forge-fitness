@@ -1,9 +1,14 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { getDashboardSummary, getStrengthSeries } from '../services/dashboard.service.js';
+import { getDashboardSummary, getStrengthSeries, getConsistencyData } from '../services/dashboard.service.js';
 import { ApiError } from '../utils/ApiError.js';
 
 export const summary = asyncHandler(async (req, res) => {
   const data = await getDashboardSummary(req.user.id);
+  res.json(data);
+});
+
+export const consistency = asyncHandler(async (req, res) => {
+  const data = await getConsistencyData(req.user.id);
   res.json(data);
 });
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchDashboardSummary } from '../api/dashboard.api.js';
 import StatCard from '../components/dashboard/StatCard.jsx';
+import ConsistencyHeatmap from '../components/dashboard/ConsistencyHeatmap.jsx';
 import WeightChart from '../components/dashboard/WeightChart.jsx';
 import StrengthChart from '../components/dashboard/StrengthChart.jsx';
 import VolumeChart from '../components/dashboard/VolumeChart.jsx';
@@ -45,6 +46,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="space-y-4">
+        <ConsistencyHeatmap />
         <WeightChart series={summary.weightSeries} onLogged={load} />
         <StrengthChart />
         <VolumeChart weeklyVolume={summary.weeklyVolume} />

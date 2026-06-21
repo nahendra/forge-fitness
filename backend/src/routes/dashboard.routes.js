@@ -8,5 +8,6 @@ router.use(requireAuth);
 
 router.get('/summary', dashboardController.summary);
 router.get('/strength', dashboardController.strength);
+router.get('/consistency', dashboardController.consistency);
 
 export default router;

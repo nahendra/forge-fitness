@@ -3,29 +3,77 @@ import { ApiError } from '../utils/ApiError.js';
 
 const NON_OTHER_PARTS = ['Chest', 'Back', 'Legs'];
 
+function exerciseCreateInput(exercises) {
+  return exercises.map((ex, exIndex) => ({
+    name: ex.name,
+    order: exIndex,
+    sets: {
+      create: ex.sets.map((s, setIndex) => ({
+        setNumber: setIndex + 1,
+        reps: s.reps,
+        weightKg: s.weightKg,
+      })),
+    },
+  }));
+}
+
+// Best-effort personalization: any exercise name a user logs gets remembered
+// against their account for that muscle group, so it shows up as a dropdown
+// suggestion next time — whether or not it was already one of the built-in
+// suggestions. The unique constraint makes re-using a name a no-op.
+async function upsertCustomExercises(userId, bodyPart, names) {
+  const uniqueNames = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  await Promise.all(
+    uniqueNames.map((name) =>
+      prisma.customExercise.upsert({
+        where: { userId_bodyPart_name: { userId, bodyPart, name } },
+        update: {},
+        create: { userId, bodyPart, name },
+      })
+    )
+  );
+}
+
+export async function getCustomExercises(userId) {
+  return prisma.customExercise.findMany({
+    where: { userId },
+    select: { bodyPart: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+}
+
 export async function createWorkoutSession(userId, { date, bodyPart, notes, exercises }) {
-  return prisma.workoutSession.create({
+  const session = await prisma.workoutSession.create({
     data: {
       userId,
       date,
       bodyPart,
       notes,
-      exercises: {
-        create: exercises.map((ex, exIndex) => ({
-          name: ex.name,
-          order: exIndex,
-          sets: {
-            create: ex.sets.map((s, setIndex) => ({
-              setNumber: setIndex + 1,
-              reps: s.reps,
-              weightKg: s.weightKg,
-            })),
-          },
-        })),
-      },
+      exercises: { create: exerciseCreateInput(exercises) },
     },
     include: { exercises: { include: { sets: true }, orderBy: { order: 'asc' } } },
   });
+
+  await upsertCustomExercises(userId, bodyPart, exercises.map((e) => e.name));
+
+  return session;
+}
+
+export async function updateWorkoutSession(userId, sessionId, { date, bodyPart, notes, exercises }) {
+  const existing = await prisma.workoutSession.findFirst({ where: { id: sessionId, userId } });
+  if (!existing) throw ApiError.notFound('Workout session not found.');
+
+  await prisma.$transaction([
+    prisma.exercise.deleteMany({ where: { sessionId } }),
+    prisma.workoutSession.update({
+      where: { id: sessionId },
+      data: { date, bodyPart, notes, exercises: { create: exerciseCreateInput(exercises) } },
+    }),
+  ]);
+
+  await upsertCustomExercises(userId, bodyPart, exercises.map((e) => e.name));
+
+  return getWorkoutSession(userId, sessionId);
 }
 
 async function getAllSessionsRaw(userId) {

@@ -1,5 +1,6 @@
 import { getAllSessionsRaw, calcSessionVolume, detectPlateaus, maxWeight, findPrevSession } from './workouts.service.js';
 import { listWeightLogs } from './weights.service.js';
+import { buildConsistency, toDateKey } from '../utils/consistency.js';
 
 function getWeekNumber(date) {
   const oneJan = new Date(date.getFullYear(), 0, 1);
@@ -61,6 +62,13 @@ export async function getDashboardSummary(userId) {
     },
     plateauAlerts: detectPlateaus(sessions),
   };
+}
+
+export async function getConsistencyData(userId) {
+  const sessions = await getAllSessionsRaw(userId);
+  const entries = sessions.map((s) => ({ dateKey: toDateKey(s.date), volumeKg: calcSessionVolume(s) }));
+  const { days, currentStreak, bestStreak } = buildConsistency(entries);
+  return { days, currentStreak, bestStreak, totalSessions: sessions.length };
 }
 
 export async function getStrengthSeries(userId, exerciseName) {

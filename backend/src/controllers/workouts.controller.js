@@ -1,16 +1,29 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import {
   createWorkoutSession,
+  updateWorkoutSession,
   listWorkoutSessions,
   getWorkoutSession,
   deleteWorkoutSession,
   getUserPlateauAlerts,
+  getCustomExercises,
 } from '../services/workouts.service.js';
 
 export const create = asyncHandler(async (req, res) => {
   const session = await createWorkoutSession(req.user.id, req.body);
   req.log.info({ userId: req.user.id, sessionId: session.id }, 'Workout session saved');
   res.status(201).json({ session });
+});
+
+export const update = asyncHandler(async (req, res) => {
+  const session = await updateWorkoutSession(req.user.id, req.params.id, req.body);
+  req.log.info({ userId: req.user.id, sessionId: req.params.id }, 'Workout session updated');
+  res.json({ session });
+});
+
+export const customExercises = asyncHandler(async (req, res) => {
+  const exercises = await getCustomExercises(req.user.id);
+  res.json({ exercises });
 });
 
 export const list = asyncHandler(async (req, res) => {

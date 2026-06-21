@@ -13,7 +13,7 @@ const TABS = [
   { id: 'other', label: 'Other' },
 ];
 
-export default function SessionHistory({ refreshSignal, onDeleted }) {
+export default function SessionHistory({ refreshSignal, onDeleted, onEdit }) {
   const [filter, setFilter] = useState('all');
   const [sessions, setSessions] = useState(null);
   const [error, setError] = useState(null);
@@ -79,7 +79,14 @@ export default function SessionHistory({ refreshSignal, onDeleted }) {
       ) : (
         <div className="max-h-[480px] overflow-y-auto">
           {sessions.map((s) => (
-            <SessionCard key={s.id} session={s} open={openId === s.id} onToggle={() => setOpenId(openId === s.id ? null : s.id)} onDelete={() => handleDelete(s.id)} />
+            <SessionCard
+              key={s.id}
+              session={s}
+              open={openId === s.id}
+              onToggle={() => setOpenId(openId === s.id ? null : s.id)}
+              onDelete={() => handleDelete(s.id)}
+              onEdit={() => onEdit?.(s)}
+            />
           ))}
         </div>
       )}
@@ -87,7 +94,7 @@ export default function SessionHistory({ refreshSignal, onDeleted }) {
   );
 }
 
-function SessionCard({ session, open, onToggle, onDelete }) {
+function SessionCard({ session, open, onToggle, onDelete, onEdit }) {
   return (
     <div className="bg-card border border-border rounded-sm mb-2.5 overflow-hidden">
       <button onClick={onToggle} className="w-full flex items-center justify-between px-3.5 py-3 bg-dim text-left">
@@ -133,9 +140,20 @@ function SessionCard({ session, open, onToggle, onDelete }) {
               )}
             </div>
           ))}
-          <button onClick={onDelete} className="text-white/15 hover:text-red font-mono text-[0.58rem] uppercase tracking-wide mt-1">
-            🗑 Delete
-          </button>
+          <div className="flex gap-3 mt-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="text-white/30 hover:text-orange font-mono text-[0.58rem] uppercase tracking-wide"
+            >
+              ✎ Edit
+            </button>
+            <button onClick={onDelete} className="text-white/15 hover:text-red font-mono text-[0.58rem] uppercase tracking-wide">
+              🗑 Delete
+            </button>
+          </div>
         </div>
       )}
     </div>
